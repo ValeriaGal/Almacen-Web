@@ -1,0 +1,139 @@
+@page
+@using AutoGens
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.EntityFrameworkCore.ChangeTracking
+@using System.Globalization;
+@using System.Security.Cryptography;
+@using System.Text;
+@{
+    ViewData["Title"] = "Add Maintenance Register";
+    //await Html.RenderPartialAsync("Functions.cshtml");
+}
+<h1>@ViewData["Title"]</h1>
+
+<p>Use this page to add a new register of maintenance of one or more equipments.</p>
+
+@functions
+{   // declaration of all the Models that will be used in the html code
+    List<MaintenanceType>? AllMaintenanceTypes {get; set;}
+    string Message ="";
+    string? UserName {get; set;}
+    string? MaxDate {get; set;}
+    string? MinDate {get; set;}
+    
+    public void OnGet(string username, string EquipmentIdText, string NameText, short AreaText, string DescriptionText, byte StatusText, int YearText, string CoordinatorText, string ControlNumberText)
+    {
+        Model.Message = "";
+        Model.UserName = username;
+        Console.WriteLine($"Username :  {Model.UserName}"); // receives the temporal data sent from ViewMaintenanceNotMade, username
+        
+        Model.AllMaintenanceTypes = Functions.ListMaintenanceTypes();
+        Model.MaxDate = DateTime.Now.Date.AddYears(5).ToString("yyyy-MM-dd");
+        Model.MinDate = DateTime.Now.Date.AddYears(-1).ToString("yyyy-MM-dd");
+    }
+
+    // post for the second form, when this one is clicked, than it will go to another page that will show the new Maintenance register Added
+    public IActionResult OnPostFinish(string? username, byte MaintenanceTypeText, string? InstructionsText, DateTime ProgrammedDateText)
+    {
+        if(MaintenanceTypeText != 0)
+        {
+            if(username is not null)
+            {
+                var result = AddMaintenance(MaintenanceTypeText, InstructionsText, ProgrammedDateText, username);
+                if(result.Affected > 0)
+                {
+                    // created succesfully
+                    Console.WriteLine($"Afectado : {result.Affected}");
+                    TempData["MaintenanceRegisterId"] = result.MaintenanceId.ToString();
+                    TempData["UserName"] = username;
+                    return RedirectToPage("/MaintenanceCRUD/AddMaintain"); 
+                }
+            }
+            else
+            {
+                Model.Message = "Your username is not being saved correctly, sorry";
+            }
+        }
+        else
+        {
+            Model.Message = "There are no Maintenance Types registered at this moment, we cannot create your Maintenance Register";
+        }
+        return Page();
+    }
+
+    
+    static (int Affected, int MaintenanceId) AddMaintenance(byte MaintenanceTypeId, string? Instructions, DateTime ProgrammedDate, string? StorerId)
+    {
+        using(bd_storage db = new()) // creates connects connection with the database
+        {
+             IQueryable<MaintenanceRegister> maintenanceRegister = db.MaintenanceRegisters
+                .OrderByDescending(d=>d.MaintenanceId);
+            int BiggestId = 0;
+            int affected = -1;
+            if(maintenanceRegister is null || !maintenanceRegister.Any())
+            {
+                BiggestId = 0;
+            }
+            else
+            {
+                BiggestId = maintenanceRegister.First().MaintenanceId;
+            }
+
+            if(db.MaintenanceRegisters is null){ return(0,0);} // checks if the table exists inside the database
+            MaintenanceRegister e = new()  // creates a new object of Equipment type with all the previosuly entered values
+            {
+                MaintenanceId = (BiggestId + 1),
+                MaintenanceTypeId = MaintenanceTypeId, 
+                MaintenanceInstructions = Instructions,
+                ProgrammedDate = ProgrammedDate,
+                ExitDate = new(2001, 01, 01),
+                MaintenanceDescription = "0",                
+                StorerId = Functions.EncryptPass(StorerId),
+                MaintenanceMaterialsDescription = "0"
+            };
+
+            EntityEntry<MaintenanceRegister> entity = db.MaintenanceRegisters.Add(e); // adds the object that was just created to Equipments table inside the database
+            affected = db.SaveChanges(); // saves chenages that were made inside the database and stores the number of rows that were affected
+            return (affected, e.MaintenanceId); // returns number of rows that were affected and the new Equipment ID
+        }
+    }
+ // next line is the start of the html, and the forms where all the information is indicated 
+}
+
+@if(Model.Message != "")
+{
+    <h3>@Model.Message</h3>
+}
+    <p> This part of the register is generic, this means it will apply to all the equipments you add to this maintenance register </p>
+
+    <form method="post" asp-page-handler="Finish">
+        <input type="hidden" name="username" value="@Model.UserName">
+        <div class="mb-3">
+            <label class="form-label">Maintenance Type</label>
+            <select class="form-select" id="dropdown" name="MaintenanceTypeText">
+                @if(Model.AllMaintenanceTypes is not null)
+                {
+                    @foreach(var a in Model.AllMaintenanceTypes)
+                    { 
+                        <option value=@a.MaintenanceTypeId>@a.Name</option>
+                    }
+                }
+                else
+                {
+                    <option value = 0>No Maintenance Types Found</option>
+                }
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="fecha">Provide the Programmed Date of the Maintenance</label>
+            <input type="date" class="form-control" id="fecha" name="ProgrammedDateText" pattern="\d{4}-\d{2}-\d{2}" maxlength="10" min="@Model.MinDate" max="@Model.MaxDate" placeholder="YYYY-MM-DD" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Provide the Instructions for the Maintenance:</label>
+            <input type="textarea" class="form-control" id="Description" name="InstructionsText" maxlength="255" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Continue with the register</button>
+    </form>

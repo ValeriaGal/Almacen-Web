@@ -1,0 +1,175 @@
+@page
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.EntityFrameworkCore.ChangeTracking
+@using AutoGens
+@{
+    ViewData["Title"] = "View Pending Maintenance Registers"; // title that will be shown in the page
+}
+@functions
+{
+    public List<Maintain>? AllPendingMaintenances { get; set; } // list that stores first 20 pending maintenance registers
+    int TotalMaintenances = 0; // total maintenance registers
+    string? UserName; 
+
+    public void OnGet(string action, string username) // the action is to see if the Next or Previous button was pushed
+    {     
+        if(username != null)  Model.UserName = username; 
+        Console.WriteLine($"Username :  {Model.UserName}");
+
+        var result = ViewMaintenanceNotMade(); // gets the 20 maintenance registers afetr the offset
+        Model.AllPendingMaintenances = result.pendingMaintenanceRegisters; // sends to html maintenance registers batch
+        Model.TotalMaintenances = result.Total; // sends to html how many maintenance registers there are in total
+    }
+
+    public IActionResult OnPost(string username, string maintenanceId)
+    {
+        TempData["UserName"] = username;
+        TempData["MaintenanceID"] = maintenanceId;
+        return RedirectToPage("/MaintenanceCRUD/FinishPendingMaintenance");
+    }
+
+    public static (List<Maintain>? pendingMaintenanceRegisters, int Total) ViewMaintenanceNotMade()
+    {
+        using (bd_storage db = new())
+        {
+            DateTime dateTime = new(year: 2001, month: 01, day: 01);
+            IQueryable<Maintain>? maintain = db.Maintain
+                .Include(m => m.Maintenance)
+                .Include(m => m.Maintenance.MaintenanceType)
+                .Include(m => m.Equipment)
+                .Include(m => m.Maintenance.Storer)
+                .Where(m => m.Maintenance.MaintenanceDescription == "0")
+                .Where(m => m.Maintenance.ExitDate.Date == dateTime.Date)
+                .Where(m => m.Maintenance.MaintenanceMaterialsDescription == "0")
+                .OrderBy(m => m.MaintainId);
+            // var maintainGroup = maintain.GroupBy(ma=>ma.Maintenance.MaintenanceId);
+
+            if (maintain is null || !maintain.Any())
+            {
+                Console.WriteLine("There are no pending maintenance registers right now");
+                return(null, 0);
+            }
+
+            Console.WriteLine(
+                "|{0,-3}|{1,-12}|{2,-55}|{3,-11}|{4,-75}|{5, -15}|{6, -15}|",
+                "ID",
+                "ID Equipment",
+                "Equipment",
+                "Maintenance",
+                "Instructions for maintenance",
+                "Started",
+                "Storer ID"
+            );
+            Console.WriteLine(
+                "-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+            );
+            foreach (var m in maintain)
+            {
+                Console.WriteLine(
+                "|{0,-3}|{1,-12}|{2,-55}|{3,-11}|{4,-75}|{5, -15}|{6, -15}|",
+                    m.Maintenance?.MaintenanceId,
+                    m.Equipment?.EquipmentId,
+                    m.Equipment?.Name,
+                    m.Maintenance?.MaintenanceType?.Name,
+                    m.Maintenance?.MaintenanceInstructions,
+                    m.Maintenance?.ProgrammedDate.ToString("dd-MM-yyyy"),
+                    Functions.Decrypt(m.Maintenance?.Storer?.StorerId)
+                );
+            }
+            Console.WriteLine();
+            List<Maintain>? pMaintain = maintain.ToList();
+            return (pMaintain, maintain.Count());
+        }
+    }
+}
+
+<header>
+    <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+        <div class="container">            
+            <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-page="/Users/Storer/StorerPrincipal" asp-route-username="@Model.UserName">Home</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-page="/Formats/CreateReportDamage&Lost" asp-route-username="@Model.UserName">Report Damage&Lost</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-page="/Users/Storer/StorerActions/ViewStudents" asp-route-username="@Model.UserName">Student's Info</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-page="/EquipmentsCRUD/ViewAllEquipments" asp-route-username="@Model.UserName">View inventory</a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-page="/MaintenanceCRUD/ViewMaintenanceNotMade" asp-route-username="@Model.UserName">Maintenance Registers</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark" href="/Index" style="color: darkred;">Sign Out</a>
+            </li>
+        </div>
+    </nav>
+</header>
+
+<nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+        <div class="container">
+            <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                <ul class="navbar-nav flex-grow-1">
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-area="" asp-page="/MaintenanceCRUD/AddMaintenance" asp-route-username="@Model.UserName">Add Maintenance Report</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-area="" asp-page="/MaintenanceCRUD/FullMaintenanceHistory" asp-route-username="@Model.UserName">Full Maintenance History</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+</nav>
+
+<div class="text-center">
+    <h1 class="display-4">@ViewData["Title"]</h1>
+    
+    <h2>Total: @Model.TotalMaintenances</h2>
+    @{
+    Console.WriteLine($"TotalMaintenances: {Model.TotalMaintenances}"); // this is just so you can check
+    }
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Equipment ID</th>
+                <th>Equipment Name</th>
+                <th>Maintenance</th>
+                <th>Instructions</th>
+                <th>Date Started</th>
+                <th>Storer ID</th>
+                <th>Finish</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if(Model.AllPendingMaintenances != null){
+                @foreach (var pMaintenance in Model.AllPendingMaintenances)
+                {
+                    <tr>
+                        <td>@pMaintenance.Maintenance?.MaintenanceId</td>
+                        <td>@pMaintenance.Equipment?.EquipmentId</td>
+                        <td>@pMaintenance.Equipment?.Name</td>
+                        <td>@pMaintenance.Maintenance?.MaintenanceType?.Name</td>
+                        <td>@pMaintenance.Maintenance?.MaintenanceInstructions</td>
+                        <td>@pMaintenance.Maintenance?.ProgrammedDate.ToString("dd-MM-yyyy")</td>
+                        <td>@Functions.Decrypt(pMaintenance.Maintenance?.Storer?.StorerId)</td>
+                        <td>
+                            <form method="post" asp-page-handler="Finish">
+                                <input type="hidden" name="username" value="@Model.UserName">
+                                <button type="submit" class="btn btn-primary" style="margin-top: 8px; background-color: rgb(142, 4, 4)" asp-route-maintenanceId=@pMaintenance.Maintenance?.MaintenanceId>Finish Report</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <h2>No Maintenances Registers have been summited yet</h2>
+                Console.WriteLine("No Maintenances Registers have been summited yet");
+            }
+        </tbody>
+    </table>
+</div>

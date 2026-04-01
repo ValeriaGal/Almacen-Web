@@ -1,0 +1,225 @@
+@page
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.EntityFrameworkCore.ChangeTracking
+@using System.Text
+@using AutoGens
+@{
+    ViewData["Title"] = "View All Equipments"; // title that will be shown in the page
+}
+@functions
+{
+    public List<Equipment>? AllEquipments { get; set; } //list to store all the 20 fisrt equipments in the bd
+    int TotalEquipments = 0; // total equipments
+    string? UserName;
+    public void OnGet(string username) // get all the equipments, the action is to see if th button Next or Previous was pushed
+    {
+        if(username != null)  Model.UserName = username;
+
+        var result = ViewAllEquipments(); // calling the method that will consult the bd and bring 20 equipments found, starting from the sent offset
+        Model.AllEquipments = result.EquipmentList; // Model.AllEquipments = 20 equipments
+        Model.TotalEquipments = result.Total; //Model.TotalEquipments = int how many equipments were found in the whole Equipments Table
+    }
+
+    public void OnPost(string username, string equipment)
+    {
+        Model.UserName = username;
+        DeleteEquipment(equipment);
+
+        var result = ViewAllEquipments(); // calling the method that will consult the bd and bring 20 equipments found, starting from the sent offset
+        Model.AllEquipments = result.EquipmentList; // Model.AllEquipments = 20 equipments
+        Model.TotalEquipments = result.Total; //Model.TotalEquipments = int how many equipments were found in the whole Equipments Table
+    }
+
+    public void DeleteEquipment(string EquipmentID)
+    {
+        using(bd_storage db = new())
+        {
+            using (var transaction = db.Database.BeginTransaction()) // protect data integrity by deleting everything that needs to be deleted or not deleting anything
+            {
+                try // delete order details that have product id, than delete the products that have the category id id, than delete the category that has the catgory id
+                {   
+                    // delete related DyLEquipments 
+                    IQueryable<DyLequipment> relatedDyLEquipments = db.DyLequipments.Where(e => e.EquipmentId == EquipmentID);
+                    if(relatedDyLEquipments is not null && relatedDyLEquipments.Any())
+                    {
+                        var deletedDyLEquipments = relatedDyLEquipments.ToList();
+                        db.DyLequipments.RemoveRange(deletedDyLEquipments);
+                        db.SaveChanges(); 
+                    }
+
+                    // delete related Maintains
+                    IQueryable<Maintain> relatedMaintains = db.Maintain.Where(e => e.EquipmentId == EquipmentID);
+                    if(relatedMaintains is not null && relatedMaintains.Any())
+                    {
+                        var deletedMaintains = relatedMaintains.ToList();
+                        db.Maintain.RemoveRange(deletedMaintains);
+                        db.SaveChanges();
+                    } 
+
+                    // delete related Requests
+                    IQueryable<RequestDetail> relatedRequests = db.RequestDetails.Where(e => e.EquipmentId == EquipmentID);
+                    if(relatedRequests is not null && relatedRequests.Any())
+                    {
+                        var deletedRequests = relatedRequests.ToList();
+                        db.RequestDetails.RemoveRange(deletedRequests);
+                        db.SaveChanges();
+                    }  
+
+                    // delete related Petitions
+                    IQueryable<PetitionDetail> relatedPetitions = db.PetitionDetails.Where(e => e.EquipmentId == EquipmentID);
+                    if(relatedPetitions is not null && relatedPetitions.Any())
+                    {
+                        var deletedPetitions = relatedPetitions.ToList();
+                        db.PetitionDetails.RemoveRange(deletedPetitions);
+                        db.SaveChanges();
+                    }                  
+
+                    // Delete Chosen Equipment
+                    IQueryable<Equipment> equipment = db.Equipments.Where(e => e.EquipmentId == EquipmentID);
+                    var EquipmentList = equipment.ToList();
+                    if (equipment is not null && equipment.Any())
+                    {
+                        db.Equipments.Remove(equipment.FirstOrDefault());
+                        db.SaveChanges(); // Saves chages on the database
+                    }
+
+                    transaction.Commit(); // saves changes if everything was successfully deleted
+                }
+                catch (Exception ex) // catches possibble exceptions
+                {
+                    Console.WriteLine(ex.Message);
+                    transaction.Rollback(); // undos made changes 
+                }
+            }
+        }
+    }
+    // returns the equipments found, in what equipment it starts (offset), and the total of equipments
+    public static (List<Equipment>? EquipmentList, int Total) ViewAllEquipments() 
+    {
+        using(bd_storage db = new())
+        {
+            IQueryable<Equipment>? equipments = db.Equipments
+            .Include(e => e.Area).Include(e => e.Status).Include(e => e.Coordinator).OrderBy(e=>e.AreaId);
+
+            if((equipments is null) || !equipments.Any())
+            {
+                Console.WriteLine("There are no equipments found");
+                return(null, 0);
+            } 
+            else 
+            {
+                Console.WriteLine("| {0,-15} | {1,-80} | {2,7} | {3,-22} |",
+                    "EquipmentId", "Equipment Name", "Year", "Status");
+                Console.WriteLine("-------------------------------------------------------------------------------------------------------------------------------------");
+                
+                foreach( var e in equipments)
+                {
+                    Console.WriteLine("| {0,-15} | {1,-80} | {2,7} | {3,-22} |",
+                        e.EquipmentId, e.Name, e.Year, e.Status?.Value);
+                }
+            
+                Console.WriteLine();
+                List<Equipment>? EquipmentsList = equipments.ToList();
+                return (EquipmentsList, equipments.Count());
+            }
+        }
+    }
+}
+
+<header>
+    <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+        <div class="container">
+            <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-page="/Users/Storer/StorerPrincipal" asp-route-username="@Model.UserName">Home</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-page="/Formats/CreateReportDamage&Lost" asp-route-username="@Model.UserName">Report Damage&Lost</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-page="/Users/Storer/StorerActions/ViewStudents" asp-route-username="@Model.UserName">Student's Info</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-page="/EquipmentsCRUD/ViewAllEquipments" asp-route-username="@Model.UserName">View inventory</a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-page="/MaintenanceCRUD/ViewMaintenanceNotMade" asp-route-username="@Model.UserName">Maintenance Registers</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark" href="/Index" style="color: darkred;">Sign Out</a>
+            </li>
+        </div>
+    </nav>
+</header>
+
+<nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+        <div class="container">
+            <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                <ul class="navbar-nav flex-grow-1">
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-area="" asp-page="/EquipmentsCRUD/AddEquipments" asp-route-username="@Model.UserName">Add Equipment</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-area="" asp-page="/EquipmentsCRUD/UpdateEquipments" asp-route-username="@Model.UserName">Update Equipments</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-area="" asp-page="/EquipmentsCRUD/SearchEquipmentById" asp-route-username="@Model.UserName">Search for One Equipment ID</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-area="" asp-page="/EquipmentsCRUD/SearchEquipmentsByName" asp-route-username="@Model.UserName">Search By Equipment Name</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+</nav>
+
+<div class="text-center">
+    <h1 class="display-4">@ViewData["Title"]</h1>
+    
+    <h2>Total: @Model.TotalEquipments</h2>
+    @{
+    Console.WriteLine($"TotalEquipments: {Model.TotalEquipments}"); // this is just so you can check
+    }
+    <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Equipment Name</th>
+                    <th>Description</th>
+                    <th>Area</th>
+                    <th>Year</th>
+                    <th>Status</th>
+                    <th>Control Number</th>
+                    <th>Delete</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if(Model.AllEquipments != null){
+                    @foreach (var c in Model.AllEquipments)
+                    {
+                        <tr>
+                            <td>@c.EquipmentId</td>
+                            <td>@c.Name</td>
+                            <td>@c.Description</td>
+                            <td>@c.Area?.Name</td>
+                            <td>@c.Year</td>
+                            <td>@c.Status?.Value</td>
+                            <td>@c.ControlNumber</td>
+                            <td>
+                                <form method="post" asp-page-handler="Delete">
+                                    <input type="hidden" name="username" value="@Model.UserName">
+                                    <button type="submit" class="btn btn-primary" style="margin-top: 8px; background-color: rgb(142, 4, 4)" asp-route-equipment=@c.EquipmentId>Kill</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <h2>No equipments found in the inventory</h2>
+                    Console.WriteLine("No equipments found in the inventory");
+                }
+            </tbody>
+        </table>
+</div>
+

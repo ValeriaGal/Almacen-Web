@@ -1,0 +1,149 @@
+@page
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.EntityFrameworkCore.ChangeTracking
+@using AutoGens
+@{
+    ViewData["Title"] = "Maintenance Register History"; // title that will be shown in the page
+}
+@functions
+{
+    public List<Maintain>? AllMaintenances { get; set; } // list that stores first 20 pending maintenance registers
+    int TotalMaintenances = 0; // total maintenance registers
+    string? UserName {get; set; }
+    public void OnGet(string action, string username) // get all the equipments, the action is to see if th button Next or Previous was pushed
+    {
+        if(username != null)  Model.UserName = username;
+        var result = ViewMaintenanceHistory(); // calling the method that will consult the bd and bring 20 equipments found, starting from the sent offset
+        Model.AllMaintenances = result.MaintenanceRegisters; // Model.AllEquipments = 20 equipments
+        Model.TotalMaintenances = result.Total; //Model.TotalEquipments = int how many equipments were found in the whole Equipments Table
+    }
+
+    // lists all maintenances that have been registered
+    // returns a list of all maintenance registers and the total number of maintenance registers summited at the moment
+    public static (List<Maintain>? MaintenanceRegisters,int Total) ViewMaintenanceHistory()
+    {
+        using (bd_storage db = new()) // creates connection with the database
+        {
+            IQueryable<Maintain>? maintain = db.Maintain // finds all maintenance registers inside the db
+                .Include(m => m.Maintenance)
+                .Include(m => m.Maintenance.MaintenanceType)
+                .Include(m => m.Equipment)
+                .Include(m => m.Maintenance.Storer)
+                .OrderBy(m => m.MaintenanceId)
+                .OrderByDescending(m => m.Maintenance.ProgrammedDate);
+            // var maintainGroup = maintain.GroupBy(ma=>ma.Maintenance.MaintenanceId);
+            if (maintain is null || !maintain.Any())
+            {
+                Console.WriteLine("There are no Maintenance Registers summited yet");
+                return(null, 0);
+            }
+
+            Console.WriteLine(
+                "|{0,-3}|{1,-12}|{2,-55}|{3,-11}|{4,-75}|{5, -15}|{6, -15}|",
+                "ID",
+                "ID Equipment",
+                "Equipment",
+                "Maintenance",
+                "Instructions for maintenance",
+                "Maintenance Description",
+                "Started",
+                "Returned",
+                "Storer ID",
+                "",
+                "Used Materials"
+            );
+            Console.WriteLine(
+                "-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+            );
+            foreach (var m in maintain)
+            {
+                Console.WriteLine(
+                "|{0,-3}|{1,-12}|{2,-55}|{3,-11}|{4,-75}|{5, -15}|{6, -15}|",
+                    m.Maintenance?.MaintenanceId,
+                    m.Equipment?.EquipmentId,
+                    m.Equipment?.Name,
+                    m.Maintenance?.MaintenanceType?.Name,
+                    m.Maintenance?.MaintenanceInstructions,
+                    m.Maintenance?.MaintenanceDescription,
+                    m.Maintenance?.ProgrammedDate.ToString("dd-MM-yyyy"),
+                    m.Maintenance?.ExitDate.ToString("dd-MM-yyyy"),
+                    m.Maintenance?.Storer?.Name,
+                    m.Maintenance?.Storer?.LastNameP,
+                    m.Maintenance?.MaintenanceMaterialsDescription
+                );
+            }
+            Console.WriteLine();
+            List<Maintain>? MaintainList = maintain.ToList();
+            return (MaintainList, MaintainList.Count()); // returns a complete list of all maintennace registers and the amount summited 
+        }
+    }
+}
+
+<nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+        <div class="container">
+            <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                <ul class="navbar-nav flex-grow-1">
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-area="" asp-page="/MaintenanceCRUD/ViewMaintenanceNotMade" asp-route-username="@Model.UserName">Maintenance Registers</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-area="" asp-page="/MaintenanceCRUD/AddMaintenance" asp-route-username="@Model.UserName">Add Maintenance Report</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-area="" asp-page="/MaintenanceCRUD/FullMaintenanceHistory" asp-route-username="@Model.UserName">Full Maintenance History</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+</nav>
+
+<div class="text-center">
+    <h1 class="display-4">@ViewData["Title"]</h1>
+    
+    <h2>Total: @Model.TotalMaintenances</h2>
+    @{
+    Console.WriteLine($"TotalMaintenances: {Model.TotalMaintenances}"); // this is just so you can check
+    }
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Equipment ID</th>
+                <th>Equipment Name</th>
+                <th>Maintenance</th>
+                <th>Instructions</th>
+                <th>Description</th>
+                <th>Date Started</th>
+                <th>Date Finished</th>
+                <th>Storer Name</th>
+                <th></th>
+                <th>Materials Used</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if(Model.AllMaintenances != null){
+                @foreach (var pMaintenance in Model.AllMaintenances)
+                {
+                    <tr>
+                        <td>@pMaintenance.Maintenance?.MaintenanceId</td>
+                        <td>@pMaintenance.Equipment?.EquipmentId</td>
+                        <td>@pMaintenance.Equipment?.Name</td>
+                        <td>@pMaintenance.Maintenance?.MaintenanceType?.Name</td>
+                        <td>@pMaintenance.Maintenance?.MaintenanceInstructions</td>
+                        <td>@pMaintenance.Maintenance?.MaintenanceDescription</td>
+                        <td>@pMaintenance.Maintenance?.ProgrammedDate.ToString("dd-MM-yyyy")</td>
+                        <td>@pMaintenance.Maintenance?.ExitDate.ToString("dd-MM-yyyy")</td>
+                        <td>@pMaintenance.Maintenance?.Storer?.Name</td>
+                        <td>@pMaintenance.Maintenance?.Storer?.LastNameP</td>
+                        <td>@pMaintenance.Maintenance?.MaintenanceMaterialsDescription</td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <h2>No Maintenances Registers have been summited yet</h2>
+                Console.WriteLine("No Maintenances Registers have been summited yet");
+            }
+        </tbody>
+    </table>
+</div>

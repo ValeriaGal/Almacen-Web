@@ -1,0 +1,16 @@
+@page
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.EntityFrameworkCore.ChangeTracking
+@using AutoGens
+@{
+    ViewData["Title"] = "Coordinator Menu";
+    string username = TempData["Username"]?.ToString() ?? "11111111";
+    ViewData["ShowNavBar"] = true;
+    var userTypeAndUsername = Tuple.Create("Coordinador", username);
+}
+
+<div class="container">
+    <!-- Incluir la vista parcial y pasar el modelo -->
+    <partial name="_NavBar" model="userTypeAndUsername" />
+</div>
+<h1>Welcome Coordinator! Please choose any of the options above</h1>
